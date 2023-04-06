@@ -13,7 +13,7 @@ http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/
 	<db:config name="Database_Config" doc:name="Database Config" doc:id="ec8e08da-b7dd-43fc-a703-b99596e9729e" >
 		<db:my-sql-connection host="${db.host}" port="${db.port}" user="${db.user}" password="${db.password}" database="${db.database}" />
 	</db:config>
-	<flow name="batch-processingFlow" doc:id="673da129-a296-43ea-a150-d034073eca63" >
+	<flow name="foreach-record-by-record-Flow" doc:id="673da129-a296-43ea-a150-d034073eca63" >
 		<http:listener doc:name="Listener" doc:id="4a936ad1-4a21-417a-9c8c-9858a5a1a4a6" config-ref="HTTP_Listener_config" path="${http.resourse}"/>
 		<foreach doc:name="For Each" doc:id="b149c648-aab9-4087-a987-e598124fdd8e" >
 			<logger level="INFO" doc:name="Logger" doc:id="7f6ec8fd-65f0-40f4-b626-7d8024741214" message="data one by one insertion : #[payload]" />
@@ -37,6 +37,60 @@ output application/json
 	"status": 201,
 	"message": "data has been successfully inserted"
 }]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+	<flow name="foreach-bulkinsert-Flow" doc:id="4305d2c7-a417-4653-89df-1dcb76b8fcef" >
+		<http:listener doc:name="Listener" doc:id="fe16eaeb-db83-42f7-a9f6-0274dd142e61" config-ref="HTTP_Listener_config" path="bulkinsert"/>
+		<foreach doc:name="For Each" doc:id="978bcffa-42d8-4feb-b106-aa56722f8f3c" batchSize="5">
+			<logger level="INFO" doc:name="Logger" doc:id="38577527-1d71-4730-85f0-f21c36e405d6" message="data one by one insertion : #[payload]" />
+			<ee:transform doc:name="Transform Message" doc:id="3bdcee25-2ca1-4db9-b53c-2330e0424466" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload map(item, indexOf) -> {
+	Name: item.name,
+	id: item.id,
+	Address: item.address,
+	Phonenumber: item.phno
+}]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+			<db:bulk-insert doc:name="Bulk insert" doc:id="050beb3a-c267-4079-9fc6-e3e02d697e17" config-ref="Database_Config">
+				<db:sql ><![CDATA[INSERT INTO employee (Name, id, Address, Phonenumber)
+VALUES (:Name, :id, :Address, :Phonenumber)]]></db:sql>
+			</db:bulk-insert>
+		
+</foreach>
+		<ee:transform doc:name="Transform Message" doc:id="401ae12e-52b6-416c-a3c7-e938f2d7edc3" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"status": 201,
+	"message": "data has been successfully inserted"
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		
+	</flow>
+	<flow name="batch-processingFlow" doc:id="727aa837-8f16-4ff6-bc2b-7e8365a532ab" >
+		<http:listener doc:name="Listener" doc:id="28fa6c49-f1f1-46f8-b712-4f4584f2d8af" config-ref="HTTP_Listener_config" path="select/{Address}"/>
+		<set-variable value="#[attributes.uriParams.Address]" doc:name="Set Variable" doc:id="d881b79c-0aa9-4857-ba11-1f8e3c6a2a5e" variableName="address"/>
+		<db:select doc:name="Select" doc:id="25e822ea-0b94-42a3-bc73-4b35ffc4b402" config-ref="Database_Config">
+			<db:sql ><![CDATA[select * from employee where Address= :Address]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{
+	Address: vars.address
+}]]]></db:input-parameters>
+		</db:select>
+		<ee:transform doc:name="Transform Message" doc:id="9b4124fa-6e64-4367-aba6-87bf37c8204d" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
 			</ee:message>
 		</ee:transform>
 	</flow>
