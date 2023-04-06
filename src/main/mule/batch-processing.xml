@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<configuration-properties doc:name="Configuration properties" doc:id="182e2600-cfb9-4c04-b697-267dc688bf6c" file="properties\dev.properties" />
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="5a076b10-d86c-445a-8f8d-9b1bf1d3436a" >
+		<http:listener-connection host="${http.host}" port="${http.port}" />
+	</http:listener-config>
+	<db:config name="Database_Config" doc:name="Database Config" doc:id="ec8e08da-b7dd-43fc-a703-b99596e9729e" >
+		<db:my-sql-connection host="${db.host}" port="${db.port}" user="${db.user}" password="${db.password}" database="${db.database}" />
+	</db:config>
+	<flow name="batch-processingFlow" doc:id="673da129-a296-43ea-a150-d034073eca63" >
+		<http:listener doc:name="Listener" doc:id="4a936ad1-4a21-417a-9c8c-9858a5a1a4a6" config-ref="HTTP_Listener_config" path="${http.resourse}"/>
+		<foreach doc:name="For Each" doc:id="b149c648-aab9-4087-a987-e598124fdd8e" >
+			<logger level="INFO" doc:name="Logger" doc:id="7f6ec8fd-65f0-40f4-b626-7d8024741214" message="data one by one insertion : #[payload]" />
+			<db:insert doc:name="Insert" doc:id="a4ee56f0-4d44-450f-98ff-b9908b286e84" config-ref="Database_Config">
+			<db:sql><![CDATA[INSERT INTO employee (Name, id, Address, Phonenumber)
+VALUES (:Name, :id, :Address, :Phonenumber)]]></db:sql>
+			<db:input-parameters><![CDATA[#[{
+	Name: payload.name,
+	id: payload.id,
+	Address: payload.address,
+	Phonenumber: payload.phno
+}]]]></db:input-parameters>
+		</db:insert>
+		</foreach>
+		<ee:transform doc:name="Transform Message" doc:id="9fab4d61-dbb5-416f-8c29-ceefbc012d98" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"status": 201,
+	"message": "data has been successfully inserted"
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+</mule>
