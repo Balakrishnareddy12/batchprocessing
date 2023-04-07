@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:db="http://www.mulesoft.org/schema/mule/db"
-	xmlns:http="http://www.mulesoft.org/schema/mule/http"
-	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+<mule xmlns:batch="http://www.mulesoft.org/schema/mule/batch" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
 http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
 http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
-http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/batch http://www.mulesoft.org/schema/mule/batch/current/mule-batch.xsd">
 	<configuration-properties doc:name="Configuration properties" doc:id="182e2600-cfb9-4c04-b697-267dc688bf6c" file="properties\dev.properties" />
 	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="5a076b10-d86c-445a-8f8d-9b1bf1d3436a" >
 		<http:listener-connection host="${http.host}" port="${http.port}" />
@@ -76,7 +77,147 @@ output application/json
 		</ee:transform>
 		
 	</flow>
-	<flow name="batch-processingFlow" doc:id="727aa837-8f16-4ff6-bc2b-7e8365a532ab" >
+	<flow name="batch-processing-record-by-record-Flow1" doc:id="4e04a1f5-5ed1-4f93-9aee-109cff7b0899" >
+		<http:listener doc:name="Listener" doc:id="52f2b696-2cec-4c3c-8ecb-dd967a34b22e" config-ref="HTTP_Listener_config" path="bp1"/>
+		<db:select doc:name="Select" doc:id="a7386f31-b275-4be6-92fd-15757bcc59b4" config-ref="Database_Config" >
+			<db:sql ><![CDATA[select * from employee]]></db:sql>
+		</db:select>
+		<ee:transform doc:name="Transform Message" doc:id="482a1f6b-8e8d-4ffd-a192-a44a7c22bcf6" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload map(item, indexOf) ->{
+	emp_name: item.Name,
+	emp_id: item.id,
+	emp_address: item.Address,
+	emp_phno: item.Phonenumber
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<batch:job jobName="batch-processing-record-by-record-Batch_Job" doc:id="888467e9-9a4b-4db2-bfd4-f31cda7d0edb" blockSize="10">
+			<batch:process-records >
+				<batch:step name="Batch_Step-record-by-record" doc:id="4e43e7b5-cc12-4f3b-a734-4f4d68123678" >
+					<db:insert doc:name="Insert" doc:id="375538ba-e871-445b-bea8-42a3a0f8ff96" config-ref="Database_Config" >
+						<db:sql ><![CDATA[insert into employee_data(emp_name, emp_id, emp_address, emp_phno) values(:emp_name, :emp_id, :emp_address, :emp_phno)]]></db:sql>
+						<db:input-parameters ><![CDATA[#[{
+	emp_name: payload.emp_name,
+	emp_id:payload.emp_id,
+	emp_address: payload.emp_address,
+	emp_phno: payload.emp_phno
+}]]]></db:input-parameters>
+					</db:insert>
+				</batch:step>
+			</batch:process-records>
+			<batch:on-complete >
+				<ee:transform doc:name="Transform Message" doc:id="bc576998-06f3-4485-bafa-003c88c1f860" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</batch:on-complete>
+		</batch:job>
+	</flow>
+	<flow name="fetch-from-tb1-insert-into-tb2-record-by-record-Flow1" doc:id="75bf16d5-aa8c-4417-9e76-041e23748932" >
+		<http:listener doc:name="Listener" doc:id="f849bfe9-f431-47fd-a1b1-9f0cea5763f1" config-ref="HTTP_Listener_config" path="batchProcess"/>
+		<db:select doc:name="Select" doc:id="0c13931a-0d6c-4c8c-bc83-a7799e928149" config-ref="Database_Config">
+			<db:sql ><![CDATA[select * from employee]]></db:sql>
+		</db:select>
+		<ee:transform doc:name="Transform Message" doc:id="cc59f956-39e8-475b-add2-fe74964d8dac" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload map(item, indexOf) ->{
+	emp_name: item.Name,
+	emp_id: item.id,
+	emp_address: item.Address,
+	emp_phno: item.Phonenumber
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<foreach doc:name="For Each" doc:id="cf2dbdcf-d47b-48b3-81e4-8583a7dfe132" >
+			<logger level="INFO" doc:name="Logger" doc:id="6e373344-a0fa-4580-a4e5-138c7a5a8059" message="data inserted record by record"/>
+			<db:insert doc:name="Insert" doc:id="ce0bc589-55bd-4a51-abc7-ac85d1d89578" config-ref="Database_Config">
+			<db:sql><![CDATA[insert into employee_data(emp_name, emp_id, emp_address, emp_phno) values(:emp_name, :emp_id, :emp_address, :emp_phno)]]></db:sql>
+				<db:input-parameters ><![CDATA[#[{
+	emp_name: payload.emp_name,
+	emp_id:payload.emp_id,
+	emp_address: payload.emp_address,
+	emp_phno: payload.emp_phno
+}]]]></db:input-parameters>
+		</db:insert>
+		</foreach>
+		<ee:transform doc:name="Transform Message" doc:id="c6b4361e-b3fd-49bd-8a68-50afbd5b63d2">
+				<ee:message>
+					<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"status": 201,
+	"message": "Data has been successfully inserted"
+}]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+	</flow>
+	<flow name="fetchdata-tb1-insert-tb2-by-bulkinsertion-Flow1" doc:id="02473132-787a-4137-9ccf-411dfce47e9a" >
+		<http:listener doc:name="Listener" doc:id="880dea18-dc28-4999-9983-363f78068963" config-ref="HTTP_Listener_config" path="selectToinsert"/>
+		<db:select doc:name="Select" doc:id="917a1b13-c9ec-493f-ac8b-8f320c45dd98" config-ref="Database_Config" >
+			<db:sql ><![CDATA[select * from employee]]></db:sql>
+		</db:select>
+		<ee:transform doc:name="Transform Message" doc:id="1868d9ed-66c7-4c2c-9d14-3fcbc7d00edd" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload map(item, indexOf) ->{
+	emp_name: item.Name,
+	emp_id: item.id,
+	emp_address: item.Address,
+	emp_phno: item.Phonenumber
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<foreach doc:name="For Each" doc:id="d5c9c7fe-1a6f-44e6-b232-483f1b77d840" >
+			<logger level="INFO" doc:name="Logger" doc:id="48eee17c-afce-4432-83b8-9322b68c0a59" message="data inserted record by record: #[payload]" />
+			<db:bulk-insert doc:name="Bulk insert" doc:id="6bbb0800-32d2-4cfd-825e-6151ff8e0025" config-ref="Database_Config">
+				<db:sql ><![CDATA[insert into employee_data(emp_name, emp_id, emp_address, emp_phno) values(:emp_name, :emp_id, :emp_address, :emp_phno)]]></db:sql>
+			</db:bulk-insert>
+		</foreach>
+		<ee:transform doc:name="Transform Message1" doc:id="21fc5273-1215-40be-9ad1-a4850fe66b83" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"status": 201,
+	"message": "Data has been successfully inserted"
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+	<flow name="batch-processingFlow" doc:id="96926f86-2dd2-43fa-8adf-d2e2727cf734" >
+		<http:listener doc:name="Listener" doc:id="37a1354f-5220-445f-ae04-7be7d26dbf66" config-ref="HTTP_Listener_config" path="delete"/>
+		<set-variable value="#[attributes.queryParams.empid]" doc:name="Set Variable" doc:id="0c7093a0-25a0-4539-aa32-24e8d0591507" variableName="id"/>
+		<db:delete doc:name="Delete" doc:id="c2242c66-b24a-4afb-a4e5-221fcd8e1b7c" config-ref="Database_Config">
+			<db:sql ><![CDATA[DELETE FROM employee_data WHERE emp_id>=1]]></db:sql>
+		</db:delete>
+		<ee:transform doc:name="Transform Message" doc:id="fe3a48df-0b75-43d9-8828-a35d2f334ab9" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"status": 200,
+	"message": "Data has been deleted successfully"
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+	<flow name="fetch-data-condition-Flow" doc:id="727aa837-8f16-4ff6-bc2b-7e8365a532ab" >
 		<http:listener doc:name="Listener" doc:id="28fa6c49-f1f1-46f8-b712-4f4584f2d8af" config-ref="HTTP_Listener_config" path="select/{Address}"/>
 		<set-variable value="#[attributes.uriParams.Address]" doc:name="Set Variable" doc:id="d881b79c-0aa9-4857-ba11-1f8e3c6a2a5e" variableName="address"/>
 		<db:select doc:name="Select" doc:id="25e822ea-0b94-42a3-bc73-4b35ffc4b402" config-ref="Database_Config">
@@ -93,5 +234,36 @@ output application/json
 payload]]></ee:set-payload>
 			</ee:message>
 		</ee:transform>
+	</flow>
+	<flow name="batch-processing-record-by-record-Flow" doc:id="a855ff59-8819-4f46-9028-e2bc784b7367" >
+		<http:listener doc:name="Listener" doc:id="181acfd6-d1a4-4fb3-8e56-615a77f878c8" config-ref="HTTP_Listener_config" path="bp2" />
+		<db:select doc:name="Select" doc:id="e25a2670-3ff3-408f-9f6c-0ccaeb67d8a2" config-ref="Database_Config" >
+			<db:sql ><![CDATA[select * from employee]]></db:sql>
+		</db:select>
+		<batch:job jobName="batch-processing-bulkrecords-Batch_Job" doc:id="72fe034d-21c8-4f16-bbb8-81fadc246dcb" blockSize="10" >
+			<batch:process-records >
+				<batch:step name="Batch_Step-record-by-record" doc:id="39ffcc03-227e-408c-a17d-74a72252e408" >
+					<batch:aggregator doc:name="Batch Aggregator" doc:id="8b39c19e-03f8-4aa3-9871-285a6e964f16" size="5">
+						<logger level="INFO" doc:name="Logger" doc:id="c628d270-c1e6-4683-a9ab-ca6bd633a7ef" message="Bulk data insertion has been started: #[payload]"/>
+						<ee:transform doc:name="Transform Message" doc:id="455d935e-c142-42c3-9ac1-a32e367ff426">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload map(item, indexOf) ->{
+	emp_name: item.Name,
+	emp_id: item.id,
+	emp_address: item.Address,
+	emp_phno: item.Phonenumber
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+						<db:bulk-insert doc:name="Bulk insert" doc:id="4a0786e5-3805-4c3e-8a72-c14a54fa83ac" config-ref="Database_Config">
+							<db:sql ><![CDATA[insert into employee_data(emp_name, emp_id, emp_address, emp_phno) values(:emp_name, :emp_id, :emp_address, :emp_phno)]]></db:sql>
+						</db:bulk-insert>
+					</batch:aggregator>
+				</batch:step>
+			</batch:process-records>
+		</batch:job>
 	</flow>
 </mule>
